@@ -75,7 +75,7 @@ export function ImageInput({ onFileChange, reset }: Readonly<ImageInputProps>) {
   return (
     <Card>
       <CardContent
-        className={`flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-lg cursor-pointer ${
+        className={`p-0 overflow-hidden flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-lg cursor-pointer ${
           isDragging ? "border-primary" : "border-gray-300"
         }`}
         onDragEnter={handleDragEnter}

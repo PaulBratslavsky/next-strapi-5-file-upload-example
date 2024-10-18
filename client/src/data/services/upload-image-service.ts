@@ -1,28 +1,10 @@
-import { z } from "zod";
-
-// Define the schema for file validation
-const FileSchema = z.object({
-  name: z.string(),
-  type: z.string().startsWith("image/"),
-  size: z.number().max(5 * 1024 * 1024), // 5MB max size
-});
-
-// Define the schema for the entire form data
-const UploadSchema = z.object({
-  image: FileSchema,
-});
 
 export async function uploadImageService(formData: FormData) {
   try {
-    // Validate the form data
-    const validatedFields = UploadSchema.parse({
-      image: formData.get("image"),
-    });
+    const file = formData.get("image") as File | null;
+    if (!file) throw new Error("No image file provided");
 
-    const file = validatedFields.image;
-
-    // Get the file buffer
-    const fileBuffer = await (formData.get("image") as File).arrayBuffer();
+    const fileBuffer = await file.arrayBuffer();
 
     // Create a new FormData instance for the API request
     const apiFormData = new FormData();
@@ -38,23 +20,14 @@ export async function uploadImageService(formData: FormData) {
       body: apiFormData,
     });
 
-    if (!response.ok) {
-      throw new Error("Failed to upload image");
-    }
+    if (!response.ok) throw new Error("Failed to upload image");
 
     const data = await response.json();
 
-
-    // Assuming the API returns a URL to the uploaded image
+    // Assuming the API returns an array of uploaded files
     return { data };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      // Handle Zod validation errors
-      const errorMessages = error.errors.map((err) => err.message);
-      console.error("Validation error:", errorMessages);
-      return { error: errorMessages.join(", ") };
-    }
     console.error("Upload error:", error);
-    return { error: "Failed to upload image" };
+    return { error: error instanceof Error ? error.message : "Failed to upload image" };
   }
 }

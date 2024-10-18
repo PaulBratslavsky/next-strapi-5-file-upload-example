@@ -1,63 +1,78 @@
-'use server'
+"use server";
 
-import { revalidatePath } from 'next/cache'
-import { z } from 'zod'
+import { z } from "zod";
 
 // Define the schema for file validation
 const FileSchema = z.object({
   name: z.string(),
-  type: z.string().startsWith('image/'),
+  type: z.string().startsWith("image/"),
   size: z.number().max(5 * 1024 * 1024), // 5MB max size
-})
+});
 
 // Define the schema for the entire form data
 const UploadSchema = z.object({
-  image: FileSchema,
-})
+  image: z
+    .instanceof(File)
+    .refine((file) => FileSchema.safeParse(file).success, {
+      message: "Invalid file. Must be an image under 5MB.",
+    }),
+});
 
-export async function uploadImage(formData: FormData) {
+export async function uploadImage(prevState: any, formData: FormData) {
   try {
-    // Validate the form data
-    const validatedFields = UploadSchema.parse({
-      image: formData.get('image'),
-    })
+    const validatedFields = UploadSchema.safeParse({
+      image: formData.get("image"),
+    });
 
-    console.log("fug")
+    if (!validatedFields.success) {
+      return {
+        ...prevState,
+        data: null,
+        error:
+          validatedFields.error.issues[0]?.message || "Invalid image file.",
+        message: null,
+      };
+    }
 
-    const file = validatedFields.image
-
-    // Get the file buffer
-    const fileBuffer = await (formData.get('image') as File).arrayBuffer()
+    const file = validatedFields.data.image;
+    const fileBuffer = await file.arrayBuffer();
 
     // Create a new FormData instance for the API request
-    const apiFormData = new FormData()
-    apiFormData.append('files', new Blob([fileBuffer], { type: file.type }), file.name || '1.png');
+    const apiFormData = new FormData();
+
+    apiFormData.append(
+      "files",
+      new Blob([fileBuffer], { type: file.type }),
+      file.name
+    );
 
     // Send the API request
-    const response = await fetch('http://localhost:1337/api/upload', {
-      method: 'POST',
+    const response = await fetch("http://localhost:1337/api/upload", {
+      method: "POST",
       body: apiFormData,
-    })
+    });
 
-    if (!response.ok) {
-      throw new Error('Failed to upload image')
-    }
+    if (!response.ok) throw new Error("Failed to upload image");
 
-    const data = await response.json()
+    const data = await response.json();
 
-    // Assuming the API returns a URL to the uploaded image
-    const imageUrl = data.url
+    return {
+      ...prevState,
+      data,
+      error: null,
+      message: "Image uploaded successfully",
+    };
 
-    revalidatePath('/')
-    return { url: imageUrl }
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      // Handle Zod validation errors
-      const errorMessages = error.errors.map(err => err.message)
-      console.error('Validation error:', errorMessages)
-      return { error: errorMessages.join(', ') }
-    }
-    console.error('Upload error:', error)
-    return { error: 'Failed to upload image' }
+    console.error("Error uploading image:", error);
+    return {
+      ...prevState,
+      data: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "An error occurred while uploading the image.",
+      message: "Error uploading image",
+    };
   }
 }
